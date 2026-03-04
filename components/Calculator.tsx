@@ -5,7 +5,7 @@ import { Syringe as SyringeIcon, Clock, AlertTriangle, Save, Info } from "lucide
 import { supabase } from "@/lib/supabase";
 import { getDeviceId } from "@/lib/deviceId";
 
-type SyringeType = "UI-100" | "UI-50" | "mL";
+type SyringeType = "UI-100" | "UI-50";
 
 export interface HistoryEntry {
   id: string;
@@ -156,7 +156,7 @@ export default function Calculator({ onGoToHistory }: CalculatorProps) {
             Tipo de Seringa
           </label>
           <div className="flex p-1 bg-gray-800 rounded-xl">
-            {(["UI-100", "UI-50", "mL"] as SyringeType[]).map((type) => (
+            {(["UI-100", "UI-50"] as SyringeType[]).map((type) => (
               <button
                 key={type}
                 onClick={() => setSyringe(type)}

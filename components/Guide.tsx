@@ -70,7 +70,7 @@ export default function Guide({ onGoBack }: GuideProps) {
             <div className="px-4 pb-4">
               <p className="text-sm text-gray-400 leading-relaxed">
                 Seringas UI-100 são projetadas para insulinas de 100 unidades por
-                ml, enquanto UI-50 são para 40 unidades por ml. O uso da seringa
+                ml, enquanto UI-50 são para 50 unidades por ml. O uso da seringa
                 errada pode causar erro grave de dosagem.
               </p>
             </div>
