@@ -60,7 +60,7 @@ export default function Guide({ onGoBack }: GuideProps) {
           <details className="group bg-gray-800 border border-gray-700 rounded-xl overflow-hidden shadow-sm">
             <summary className="flex items-center justify-between p-4 cursor-pointer list-none">
               <span className="text-sm font-semibold text-gray-200">
-                Diferença entre seringa UI-100 e UI-50
+                Diferença entre seringa U-100 e U-40
               </span>
               <ChevronDown
                 className="text-primary group-open:rotate-180 transition-transform"
@@ -69,8 +69,8 @@ export default function Guide({ onGoBack }: GuideProps) {
             </summary>
             <div className="px-4 pb-4">
               <p className="text-sm text-gray-400 leading-relaxed">
-                Seringas UI-100 são projetadas para insulinas de 100 unidades por
-                ml, enquanto UI-50 são para 50 unidades por ml. O uso da seringa
+                Seringas U-100 são projetadas para insulinas de 100 unidades por
+                ml, enquanto U-40 são para 40 unidades por ml. O uso da seringa
                 errada pode causar erro grave de dosagem.
               </p>
             </div>
