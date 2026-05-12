@@ -12,13 +12,13 @@ interface BottomNavProps {
 
 export default function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
   return (
-    <nav className="w-full bg-gray-900 border-t border-gray-800 px-2 pb-6 pt-3 grid grid-cols-4 z-20 shrink-0">
+    <nav className="w-full bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 px-2 pb-6 pt-3 grid grid-cols-4 z-20 shrink-0 transition-colors duration-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] dark:shadow-none">
       <button
         onClick={() => onTabChange("calculator")}
         className={`flex flex-col items-center gap-1 transition-colors relative ${
           activeTab === "calculator"
             ? "text-primary"
-            : "text-gray-500 hover:text-primary"
+            : "text-gray-400 dark:text-gray-500 hover:text-primary dark:hover:text-primary"
         }`}
       >
         {activeTab === "calculator" && (
@@ -35,7 +35,7 @@ export default function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
         className={`flex flex-col items-center gap-1 transition-colors relative ${
           activeTab === "history"
             ? "text-primary"
-            : "text-gray-500 hover:text-primary"
+            : "text-gray-400 dark:text-gray-500 hover:text-primary dark:hover:text-primary"
         }`}
       >
         {activeTab === "history" && (
@@ -52,7 +52,7 @@ export default function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
         className={`flex flex-col items-center gap-1 transition-colors relative ${
           activeTab === "guide"
             ? "text-primary"
-            : "text-gray-500 hover:text-primary"
+            : "text-gray-400 dark:text-gray-500 hover:text-primary dark:hover:text-primary"
         }`}
       >
         {activeTab === "guide" && (
@@ -69,7 +69,7 @@ export default function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
         className={`flex flex-col items-center gap-1 transition-colors relative ${
           activeTab === "settings"
             ? "text-primary"
-            : "text-gray-500 hover:text-primary"
+            : "text-gray-400 dark:text-gray-500 hover:text-primary dark:hover:text-primary"
         }`}
       >
         {activeTab === "settings" && (
