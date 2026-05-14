@@ -1,50 +1,80 @@
 'use client';
 
-import React, { createContext, useContext, useState } from 'react';
-
-// Simulated User type
-export interface MockUser {
-  id: string;
-  email: string;
-}
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { supabase } from '@/lib/supabase';
+import { User } from '@supabase/supabase-js';
 
 interface AuthContextType {
-  user: MockUser | null;
+  user: User | null;
   loading: boolean;
-  signIn: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
+  setMockUser: (user: User | null) => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
-  loading: false,
-  signIn: async () => {},
+  loading: true,
   signOut: async () => {},
+  setMockUser: () => {},
 });
 
 export const useAuth = () => useContext(AuthContext);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<MockUser | null>(null);
-  const [loading, setLoading] = useState(false); // For instant UI rendering during development
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const signIn = async (email: string) => {
-    setLoading(true);
-    // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 800));
-    setUser({ id: 'user-123', email });
-    setLoading(false);
+  useEffect(() => {
+    // Check active sessions and sets the user
+    const setData = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) {
+          console.warn("Supabase session error (likely no env vars):", error.message);
+          setLoading(false);
+          return;
+        }
+        setUser(session?.user ?? null);
+      } catch (e) {
+        console.error("Auth init error:", e);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setUser(session.user);
+      } else {
+        // Only clear if not in "mock mode" (optional improvement)
+        // For now, we'll let specific events handle it
+        setUser(session?.user ?? null);
+      }
+      setLoading(false);
+    });
+
+    setData();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  const setMockUser = (mockUser: User | null) => {
+    setUser(mockUser);
   };
 
   const signOut = async () => {
-    setLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.warn("Supabase signOut error:", e);
+    }
     setUser(null);
-    setLoading(false);
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, loading, signOut, setMockUser }}>
       {children}
     </AuthContext.Provider>
   );

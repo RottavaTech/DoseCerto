@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useState } from "react";
-import { Syringe as SyringeIcon, Clock, AlertTriangle, Save, Info } from "lucide-react";
+import { Syringe as SyringeIcon, Clock, AlertTriangle, Save, Info, Loader2 } from "lucide-react";
 import { useAuth } from "./AuthProvider";
+import { supabase } from "@/lib/supabase";
 
 const SYRINGE_OPTIONS = [
   { id: "1ml_in", label: "1 mL Insulina (100 UI)" },
@@ -76,16 +77,30 @@ export default function Calculator({ onGoToHistory }: { onGoToHistory: () => voi
 
     setIsSaving(true);
     try {
-      // Simulate save delay
-      await new Promise(resolve => setTimeout(resolve, 600));
+      const syringeLabel = SYRINGE_OPTIONS.find(s => s.id === syringe)?.label || "";
+      const resultText = ui !== null 
+        ? `${volume.toFixed(2)}mL (${ui.toFixed(1)} UI)`
+        : `${volume.toFixed(2)}mL`;
+
+      const { error } = await supabase
+        .from('history')
+        .insert([{
+          user_id: user.id,
+          nome: `Cálculo: ${dose}mg (${concentration}mg/mL)`,
+          dose_info: `Seringa: ${syringeLabel} • Result: ${resultText}`,
+          created_at: new Date().toISOString()
+        }]);
+
+      if (error) throw error;
 
       // Clear inputs after saving
       setConcentration("");
       setDose("");
 
       // Provide feedback
-      alert("Salvo no diário com sucesso!");
+      alert("Cálculo salvo no seu diário!");
     } catch (error) {
+      console.error("Erro ao salvar:", error);
       alert("Erro ao salvar. Tente novamente.");
     } finally {
       setIsSaving(false);

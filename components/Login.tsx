@@ -1,31 +1,102 @@
-'use client';
-
-import React, { useState } from 'react';
-import { Syringe, Mail, Lock, Loader2, AlertCircle } from 'lucide-react';
+"use client";
+import React, { useState, useEffect } from 'react';
+import { Syringe, Mail, Lock, Loader2, AlertCircle, User as UserIcon, Calendar, Weight, Briefcase, CheckCircle2, XCircle, Eye, EyeOff } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 import { useAuth } from './AuthProvider';
 
 export default function Login() {
+  const { setMockUser } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const { signIn } = useAuth();
+
+  // Form States
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [birthDate, setBirthDate] = useState('');
+  const [weight, setWeight] = useState('');
+  const [profession, setProfession] = useState('');
+
+  // Password Visibility States
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  // Password Validation State
+  const [passValidations, setPassValidations] = useState({
+    minChar: false,
+    upperCase: false,
+    specialChar: false,
+    match: false
+  });
+
+  useEffect(() => {
+    if (!isLogin) {
+      setPassValidations({
+        minChar: password.length >= 8,
+        upperCase: /[A-Z]/.test(password),
+        specialChar: /[!@#$%^&*(),.?":{}|<>]/.test(password),
+        match: password === confirmPassword && password.length > 0
+      });
+    }
+  }, [password, confirmPassword, isLogin]);
+
+  const isFormValid = isLogin 
+    ? email && password 
+    : fullName && email && birthDate && weight && profession && 
+      passValidations.minChar && passValidations.upperCase && 
+      passValidations.specialChar && passValidations.match;
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isFormValid) return;
+
     setLoading(true);
     setError(null);
     setMessage(null);
 
+    // MOCK ADMIN BYPASS
+    if (email === 'admin@dosecerto.app' && password === 'Admin@2026!') {
+      setTimeout(() => {
+        setMockUser({
+          id: 'mock-admin-id',
+          email: 'admin@dosecerto.app',
+          user_metadata: {
+            full_name: 'Administrador DoseCerto',
+            profession: 'Arquiteto de Sistemas',
+            weight: '80',
+            birth_date: '1990-01-01'
+          }
+        } as any);
+        setLoading(false);
+      }, 1000);
+      return;
+    }
+
     try {
       if (isLogin) {
-        await signIn(email);
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (signInError) throw signInError;
       } else {
-        // Simulate sign up
-        await new Promise(resolve => setTimeout(resolve, 800));
-        setMessage('Cadastro realizado com sucesso! Você já pode fazer login no app.');
+        const { error: signUpError } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              full_name: fullName,
+              birth_date: birthDate,
+              weight: weight,
+              profession: profession,
+            }
+          }
+        });
+        if (signUpError) throw signUpError;
+        setMessage('Cadastro realizado com sucesso! Verifique seu e-mail para confirmar seu registro.');
         setIsLogin(true);
       }
     } catch (err: any) {
@@ -36,39 +107,113 @@ export default function Login() {
   };
 
   return (
-    <div className="w-full h-full flex flex-col items-center justify-center p-6 bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
-      <div className="w-full max-w-sm space-y-8">
+    <div className="w-full h-full flex flex-col items-center justify-center p-6 bg-gray-50 dark:bg-gray-900 transition-colors duration-200 overflow-y-auto">
+      <div className="w-full max-w-sm space-y-6 my-auto pt-10 pb-10">
         <div className="text-center">
           <div className="inline-flex items-center justify-center p-4 bg-primary/10 rounded-full mb-4">
-            <Syringe className="text-primary w-12 h-12" />
+            <Syringe className="text-primary w-10 h-10" />
           </div>
           <h2 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">DoseCerto</h2>
-          <p className="text-gray-500 dark:text-gray-400 mt-2 text-sm">
+          <p className="text-gray-500 dark:text-gray-400 mt-1 text-sm font-medium">
             Seu assistente pessoal de dosagem
           </p>
         </div>
 
         <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-xl transition-colors duration-200">
-          <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">
-            {isLogin ? 'Entrar na sua conta' : 'Criar nova conta'}
-          </h3>
-
           {error && (
             <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 rounded-lg flex items-start gap-2 transition-colors duration-200">
               <AlertCircle className="text-red-500 shrink-0 mt-0.5" size={16} />
-              <span className="text-sm text-red-800 dark:text-red-200">{error}</span>
+              <span className="text-xs text-red-800 dark:text-red-200">{error}</span>
             </div>
           )}
 
           {message && (
             <div className="mb-4 p-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/50 rounded-lg flex items-start gap-2 transition-colors duration-200">
-              <span className="text-sm text-emerald-800 dark:text-emerald-200">{message}</span>
+              <span className="text-xs text-emerald-800 dark:text-emerald-200">{message}</span>
             </div>
           )}
 
           <form onSubmit={handleAuth} className="space-y-4">
+            
+            {!isLogin && (
+              <>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider ml-1">Nome Completo</label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <UserIcon className="text-gray-400 dark:text-gray-500" size={18} />
+                    </div>
+                    <input
+                      type="text"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value.replace(/[^a-zA-ZÀ-ÿ\s]/g, ''))}
+                      required
+                      maxLength={40}
+                      className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 transition-all text-sm"
+                      placeholder="Ex: João da Silva"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider ml-1">Nascimento</label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <Calendar className="text-gray-400 dark:text-gray-500" size={18} />
+                      </div>
+                      <input
+                        type="date"
+                        value={birthDate}
+                        onChange={(e) => setBirthDate(e.target.value)}
+                        required
+                        max="9999-12-31"
+                        className="w-full pl-10 pr-3 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent text-gray-900 dark:text-white transition-all text-xs"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider ml-1">Peso (kg)</label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <Weight className="text-gray-400 dark:text-gray-500" size={18} />
+                      </div>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={weight}
+                        onChange={(e) => setWeight(e.target.value.replace(/\D/g, ''))}
+                        required
+                        maxLength={3}
+                        className="w-full pl-10 pr-3 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent text-gray-900 dark:text-white transition-all text-sm placeholder-gray-400"
+                        placeholder="Ex: 75"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider ml-1">Profissão</label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Briefcase className="text-gray-400 dark:text-gray-500" size={18} />
+                    </div>
+                    <input
+                      type="text"
+                      value={profession}
+                      onChange={(e) => setProfession(e.target.value.replace(/[^a-zA-ZÀ-ÿ\s]/g, ''))}
+                      required
+                      maxLength={30}
+                      className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 transition-all text-sm"
+                      placeholder="Sua profissão"
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+
             <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 ml-1">E-mail</label>
+              <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider ml-1">E-mail</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <Mail className="text-gray-400 dark:text-gray-500" size={18} />
@@ -78,36 +223,90 @@ export default function Login() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="w-full pl-10 pr-4 py-3 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 shadow-sm transition-all"
+                  maxLength={50}
+                  className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 shadow-sm transition-all text-sm"
                   placeholder="seu@email.com"
                 />
               </div>
             </div>
 
             <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 ml-1">Senha</label>
+              <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider ml-1">Senha</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <Lock className="text-gray-400 dark:text-gray-500" size={18} />
                 </div>
                 <input
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   minLength={6}
-                  className="w-full pl-10 pr-4 py-3 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 shadow-sm transition-all"
-                  placeholder="Mínimo 6 caracteres"
+                  maxLength={32}
+                  className="w-full pl-10 pr-12 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 shadow-sm transition-all text-sm border-gray-200"
+                  placeholder={isLogin ? "Sua senha" : "Mínimo 8 caracteres"}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
               </div>
             </div>
 
+            {!isLogin && (
+              <>
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider ml-1">Confirmar Senha</label>
+                <div className="relative">
+                  <input
+                    type={showConfirmPassword ? "text" : "password"}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                    maxLength={32}
+                    className="w-full px-4 pr-12 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent text-gray-900 dark:text-white transition-all text-sm"
+                    placeholder="Repita a senha"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+                  >
+                    {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+                </div>
+
+                <div className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-100 dark:border-gray-700/50 space-y-2">
+                   <div className="flex items-center gap-2">
+                      {passValidations.minChar ? <CheckCircle2 className="text-emerald-500" size={14}/> : <XCircle className="text-gray-400" size={14}/>}
+                      <span className={`text-[10px] font-bold uppercase transition-colors ${passValidations.minChar ? 'text-emerald-600' : 'text-gray-500'}`}>8+ Caracteres</span>
+                   </div>
+                   <div className="flex items-center gap-2">
+                      {passValidations.upperCase ? <CheckCircle2 className="text-emerald-500" size={14}/> : <XCircle className="text-gray-400" size={14}/>}
+                      <span className={`text-[10px] font-bold uppercase transition-colors ${passValidations.upperCase ? 'text-emerald-600' : 'text-gray-500'}`}>1 Letra Maiúscula</span>
+                   </div>
+                   <div className="flex items-center gap-2">
+                      {passValidations.specialChar ? <CheckCircle2 className="text-emerald-500" size={14}/> : <XCircle className="text-gray-400" size={14}/>}
+                      <span className={`text-[10px] font-bold uppercase transition-colors ${passValidations.specialChar ? 'text-emerald-600' : 'text-gray-500'}`}>1 Caractere Especial</span>
+                   </div>
+                   <div className="flex items-center gap-2">
+                      {passValidations.match ? <CheckCircle2 className="text-emerald-500" size={14}/> : <XCircle className="text-gray-400" size={14}/>}
+                      <span className={`text-[10px] font-bold uppercase transition-colors ${passValidations.match ? 'text-emerald-600' : 'text-gray-500'}`}>Senhas Iguais</span>
+                   </div>
+                </div>
+              </>
+            )}
+
             <button
               type="submit"
-              disabled={loading}
-              className="w-full py-3 bg-primary hover:bg-primary/90 text-white rounded-xl font-bold tracking-wide transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center mt-2 shadow-sm"
+              disabled={loading || !isFormValid}
+              className="w-full py-4 bg-primary hover:bg-primary/90 text-white rounded-xl font-bold tracking-wide transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center mt-2 shadow-lg shadow-primary/20"
             >
-              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : isLogin ? 'Entrar' : 'Cadastrar'}
+              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : isLogin ? 'Entrar Agora' : 'Criar Conta'}
             </button>
           </form>
 
@@ -119,9 +318,9 @@ export default function Login() {
                 setError(null);
                 setMessage(null);
               }}
-              className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
+              className="text-xs font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400 hover:text-primary transition-colors"
             >
-              {isLogin ? 'Não tem uma conta? Cadastre-se' : 'Já tem uma conta? Entre'}
+              {isLogin ? 'Não tem conta? Cadastrar-se' : 'Já tem uma conta? Entrar'}
             </button>
           </div>
         </div>

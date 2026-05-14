@@ -1,34 +1,27 @@
 "use client";
 
-import React, { useState } from "react";
-import { Calendar as CalendarIcon, Clock, CheckCircle, Trash2, X, Plus, Pill, Bell, Syringe } from "lucide-react";
+import React, { useState, useEffect, useCallback } from "react";
+import { Calendar as CalendarIcon, Clock, CheckCircle, Trash2, X, Plus, Pill, Bell, Syringe, Loader2 } from "lucide-react";
+import { supabase } from "@/lib/supabase";
+import { useAuth } from "./AuthProvider";
 
 interface HistoryProps {
   onGoBack: () => void;
 }
 
-export interface MockHistoryEntry {
+export interface HistoryEntry {
   id: string;
   created_at: string;
   nome: string;
-  dose_info: string; 
+  dose_info: string;
+  user_id: string;
 }
 
 export default function History({ onGoBack }: HistoryProps) {
-  const [history, setHistory] = useState<MockHistoryEntry[]>(() => [
-    {
-      id: "1",
-      created_at: new Date().toISOString(),
-      nome: "Insulina NPH",
-      dose_info: "10mg - 0.66 mL",
-    },
-    {
-      id: "2",
-      created_at: new Date(Date.now() - 86400000).toISOString(),
-      nome: "Testosterona",
-      dose_info: "15mg - 30 UI",
-    }
-  ]);
+  const { user } = useAuth();
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -38,7 +31,7 @@ export default function History({ onGoBack }: HistoryProps) {
   const [calendarViewDate, setCalendarViewDate] = useState<string>(new Date().toISOString().split('T')[0]);
   
   const [isReminderModalOpen, setIsReminderModalOpen] = useState(false);
-  const [selectedEntryForReminder, setSelectedEntryForReminder] = useState<MockHistoryEntry | null>(null);
+  const [selectedEntryForReminder, setSelectedEntryForReminder] = useState<HistoryEntry | null>(null);
   const [reminderData, setReminderData] = useState({
     frequencia: "diariamente",
     hora: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
@@ -50,8 +43,32 @@ export default function History({ onGoBack }: HistoryProps) {
     data: new Date().toISOString().split('T')[0],
     hora: new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
   });
-  
-  const handleSetReminder = (entry: MockHistoryEntry, e: React.MouseEvent) => {
+
+  // Fetch History from Supabase
+  const fetchHistory = useCallback(async () => {
+    if (!user) return;
+    try {
+      setIsLoading(true);
+      const { data, error } = await supabase
+        .from('history')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setHistory(data || []);
+    } catch (error) {
+      console.error("Erro ao buscar histórico:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    fetchHistory();
+  }, [fetchHistory]);
+
+  const handleSetReminder = (entry: HistoryEntry, e: React.MouseEvent) => {
     e.stopPropagation();
     setSelectedEntryForReminder(entry);
     setReminderData({
@@ -81,48 +98,81 @@ export default function History({ onGoBack }: HistoryProps) {
     setIsModalOpen(true);
   };
 
-  const openEditEntry = (entry: MockHistoryEntry) => {
+  const openEditEntry = (entry: HistoryEntry) => {
     setEditingId(entry.id);
     const dateObj = new Date(entry.created_at);
     setFormData({
-      nome: entry.nome || "Medicamento",
-      dose: entry.dose_info,
+      nome: entry.nome || "",
+      dose: entry.dose_info || "",
       data: dateObj.toISOString().split('T')[0],
       hora: dateObj.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
     });
     setIsModalOpen(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formData.nome) return alert("Preencha o nome do medicamento.");
+    if (!user) return alert("Você precisa estar logado.");
 
-    const dateTime = new Date(`${formData.data}T${formData.hora}:00`).toISOString();
+    try {
+      setIsSaving(true);
+      const dateTime = new Date(`${formData.data}T${formData.hora}:00`).toISOString();
 
-    if (editingId) {
-      setHistory(history.map(item => item.id === editingId ? {
-        ...item,
-        nome: formData.nome,
-        dose_info: formData.dose,
-        created_at: dateTime
-      } : item));
-    } else {
-      setHistory([
-        {
-          id: Math.random().toString(),
-          nome: formData.nome,
-          dose_info: formData.dose,
-          created_at: dateTime
-        },
-        ...history
-      ].sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
+      if (editingId) {
+        const { error } = await supabase
+          .from('history')
+          .update({
+            nome: formData.nome,
+            dose_info: formData.dose,
+            created_at: dateTime
+          })
+          .eq('id', editingId);
+        
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('history')
+          .insert([{
+            user_id: user.id,
+            nome: formData.nome,
+            dose_info: formData.dose,
+            created_at: dateTime
+          }]);
+        
+        if (error) throw error;
+      }
+      
+      await fetchHistory();
+      setIsModalOpen(false);
+    } catch (error) {
+      console.error("Erro ao salvar:", error);
+      alert("Erro ao salvar o registro.");
+    } finally {
+      setIsSaving(false);
     }
-    setIsModalOpen(false);
   };
 
-  const handleDelete = (id: string, e?: React.MouseEvent) => {
+  const handleDelete = async (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    setHistory(history.filter((entry) => entry.id !== id));
-    if (editingId === id) setIsModalOpen(false);
+    if (!confirm("Tem certeza que deseja excluir este registro?")) return;
+
+    try {
+      setIsSaving(true);
+      const { error } = await supabase
+        .from('history')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      
+      setHistory(prev => prev.filter(item => item.id !== id));
+      if (editingId === id) setIsModalOpen(false);
+    } catch (error) {
+      console.error("Erro ao excluir:", error);
+      alert("Erro ao excluir o registro.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const formatMonth = (dateString: string) => {
@@ -154,7 +204,7 @@ export default function History({ onGoBack }: HistoryProps) {
       acc[month].push(entry);
       return acc;
     },
-    {} as Record<string, MockHistoryEntry[]>,
+    {} as Record<string, HistoryEntry[]>,
   );
 
   const getRelativeDateLabel = (dateString: string) => {
@@ -238,78 +288,103 @@ export default function History({ onGoBack }: HistoryProps) {
 
         {/* List Sections */}
         <div className="flex flex-col gap-1">
-          {selectedFilterDate && (
-          <div className="px-4 py-2 mt-2 flex items-center justify-between mx-4 bg-primary/5 dark:bg-primary/10 rounded-xl border border-primary/20">
-             <span className="text-sm font-semibold text-primary">
-               Registros de: {formatDateFilter(selectedFilterDate)}
-             </span>
-             <button onClick={() => setSelectedFilterDate(null)} className="text-primary hover:text-primary/80 transition-colors p-1" title="Limpar filtro">
-               <X size={16} />
-             </button>
-          </div>
-        )}
-
-        {filteredHistory.length === 0 ? (
-          <div className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
-            <Clock className="mx-auto mb-2 opacity-50" size={48} />
-            <p>Nenhum registro encontrado {selectedFilterDate ? "nesta data" : ""}.</p>
-          </div>
-        ) : (
-          Object.entries(groupedHistory).map(([month, entries], index) => (
-            <React.Fragment key={month}>
-              {!selectedFilterDate && (
-                <h3 className={`text-gray-500 dark:text-gray-400 text-sm font-semibold px-4 pb-2 uppercase tracking-tight ${index === 0 ? "pt-2" : "pt-6"}`}>
-                  {index === 0 ? "Recentes" : month}
-                </h3>
+          {isLoading ? (
+            <div className="px-4 py-20 text-center flex flex-col items-center">
+              <Loader2 className="animate-spin text-primary mb-4" size={40} />
+              <p className="text-gray-500 font-medium">Buscando seus registros...</p>
+            </div>
+          ) : (
+            <>
+              {selectedFilterDate && (
+                <div className="px-4 py-2 mt-2 flex items-center justify-between mx-4 bg-primary/5 dark:bg-primary/10 rounded-xl border border-primary/20">
+                   <span className="text-sm font-semibold text-primary">
+                     Registros de: {formatDateFilter(selectedFilterDate)}
+                   </span>
+                   <button onClick={() => setSelectedFilterDate(null)} className="text-primary hover:text-primary/80 transition-colors p-1" title="Limpar filtro">
+                     <X size={16} />
+                   </button>
+                </div>
               )}
-              {entries.sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map((entry) => {
-                const relativeLabel = getRelativeDateLabel(entry.created_at);
-                return (
-                  <div key={entry.id} className="group px-4 py-2 cursor-pointer" onClick={() => openEditEntry(entry)}>
-                    <div className={`flex items-center gap-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-4 rounded-xl shadow-sm transition-shadow hover:border-gray-300 dark:hover:border-gray-600`}>
-                      <div className="text-emerald-600 dark:text-emerald-500 flex items-center justify-center rounded-full bg-emerald-50 dark:bg-emerald-500/10 shrink-0 size-12">
-                        <CheckCircle size={24} />
-                      </div>
-                      <div className="flex flex-col flex-1 justify-center">
-                        <div className="flex justify-between items-start">
-                          <p className="text-gray-900 dark:text-white text-base font-bold leading-none mb-1">
-                            {entry.nome}
-                          </p>
-                          {relativeLabel && (
-                            <span className="text-[10px] font-bold py-0.5 px-2 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full uppercase text-nowrap mt-0.5">
-                              {relativeLabel}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-gray-600 dark:text-gray-400 text-sm mb-1">{entry.dose_info}</p>
-                        <p className="text-gray-500 dark:text-gray-500 text-xs font-medium flex items-center gap-1">
-                          <Clock size={12}/>
-                          {formatDateTime(entry.created_at)}
-                        </p>
-                      </div>
-                      <div className="flex items-center shrink-0">
-                        <button
-                          onClick={(e) => handleSetReminder(entry, e)}
-                          className="text-gray-400 dark:text-gray-500 hover:text-blue-500 dark:hover:text-blue-400 transition-colors p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
-                          title="Adicionar Alarme"
-                        >
-                          <Bell size={20} />
-                        </button>
-                        <button
-                          onClick={(e) => handleDelete(entry.id, e)}
-                          className="text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 transition-colors p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
-                          title="Excluir"
-                        >
-                          <Trash2 size={20} />
-                        </button>
-                      </div>
-                    </div>
+
+              {filteredHistory.length === 0 ? (
+                <div className="px-6 py-20 text-center flex flex-col items-center justify-center">
+                  <div className="bg-gray-100 dark:bg-gray-800 p-6 rounded-full mb-4 transition-colors">
+                    <Clock className="text-gray-400 dark:text-gray-500" size={48} />
                   </div>
-                );
-              })}
-            </React.Fragment>
-          ))
-        )}
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 italic">Diário Vazio</h3>
+                  <p className="text-gray-500 dark:text-gray-400 mt-2 text-center max-w-[250px] leading-relaxed">
+                    {selectedFilterDate 
+                      ? "Nenhum registro encontrado para esta data específica." 
+                      : "Seus registros de aplicação aparecerão aqui após você salvá-los."}
+                  </p>
+                  {!selectedFilterDate && (
+                    <button 
+                      onClick={openNewEntry}
+                      className="mt-6 text-primary font-bold flex items-center gap-2 hover:underline"
+                    >
+                      <Plus size={20} />
+                      Fazer primeiro registro
+                    </button>
+                  )}
+                </div>
+              ) : (
+                Object.entries(groupedHistory).map(([month, entries], index) => (
+                  <React.Fragment key={month}>
+                    {!selectedFilterDate && (
+                      <h3 className={`text-gray-500 dark:text-gray-400 text-sm font-semibold px-4 pb-2 uppercase tracking-tight ${index === 0 ? "pt-2" : "pt-6"}`}>
+                        {index === 0 ? "Recentes" : month}
+                      </h3>
+                    )}
+                    {entries.sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map((entry) => {
+                      const relativeLabel = getRelativeDateLabel(entry.created_at);
+                      return (
+                        <div key={entry.id} className="group px-4 py-2 cursor-pointer" onClick={() => openEditEntry(entry)}>
+                          <div className={`flex items-center gap-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-4 rounded-xl shadow-sm transition-shadow hover:border-gray-300 dark:hover:border-gray-600`}>
+                            <div className="text-emerald-600 dark:text-emerald-500 flex items-center justify-center rounded-full bg-emerald-50 dark:bg-emerald-500/10 shrink-0 size-12">
+                              <CheckCircle size={24} />
+                            </div>
+                            <div className="flex flex-col flex-1 justify-center">
+                              <div className="flex justify-between items-start">
+                                <p className="text-gray-900 dark:text-white text-base font-bold leading-none mb-1">
+                                  {entry.nome}
+                                </p>
+                                {relativeLabel && (
+                                  <span className="text-[10px] font-bold py-0.5 px-2 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded-full uppercase text-nowrap mt-0.5">
+                                    {relativeLabel}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-gray-600 dark:text-gray-400 text-sm mb-1">{entry.dose_info}</p>
+                              <p className="text-gray-500 dark:text-gray-500 text-xs font-medium flex items-center gap-1">
+                                <Clock size={12}/>
+                                {formatDateTime(entry.created_at)}
+                              </p>
+                            </div>
+                            <div className="flex items-center shrink-0">
+                              <button
+                                onClick={(e) => handleSetReminder(entry, e)}
+                                className="text-gray-400 dark:text-gray-500 hover:text-blue-500 dark:hover:text-blue-400 transition-colors p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
+                                title="Adicionar Alarme"
+                              >
+                                <Bell size={20} />
+                              </button>
+                              <button
+                                onClick={(e) => handleDelete(entry.id, e)}
+                                className="text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 transition-colors p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
+                                title="Excluir"
+                              >
+                                <Trash2 size={20} />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </React.Fragment>
+                ))
+              )}
+            </>
+          )}
         </div>
       </div>
 
@@ -335,18 +410,18 @@ export default function History({ onGoBack }: HistoryProps) {
               <div>
                 <div className="flex justify-between items-center ml-1">
                    <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">Medicamento</label>
-                   <span className="text-xs text-gray-500 dark:text-gray-500">{formData.nome.length}/20</span>
+                   <span className="text-xs text-gray-500 dark:text-gray-500">{formData.nome.length}/30</span>
                 </div>
                 <input 
                   type="text" 
-                  maxLength={20}
+                  maxLength={30}
                   value={formData.nome}
                   onChange={e => setFormData({...formData, nome: e.target.value})}
-                  className={`w-full mt-1 p-4 bg-white dark:bg-gray-900 border ${formData.nome.length >= 20 ? 'border-red-500' : 'border-gray-200 dark:border-gray-700'} rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-primary focus:outline-none transition-colors duration-200 shadow-sm`}
+                  className={`w-full mt-1 p-4 bg-white dark:bg-gray-900 border ${formData.nome.length >= 30 ? 'border-red-500' : 'border-gray-200 dark:border-gray-700'} rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-primary focus:outline-none transition-colors duration-200 shadow-sm`}
                   placeholder="Ex: Insulina, Dura..."
                 />
-                {formData.nome.length >= 20 && (
-                  <p className="text-red-500 dark:text-red-400 text-xs mt-1 ml-1">Limite máximo de 20 caracteres atingido.</p>
+                {formData.nome.length >= 30 && (
+                  <p className="text-red-500 dark:text-red-400 text-xs mt-1 ml-1">Limite máximo de 30 caracteres atingido.</p>
                 )}
               </div>
 
@@ -392,15 +467,18 @@ export default function History({ onGoBack }: HistoryProps) {
               {editingId && (
                 <button 
                   onClick={() => handleDelete(editingId)}
-                  className="px-6 py-4 rounded-xl font-bold bg-white dark:bg-gray-800 text-red-500 dark:text-red-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-700"
+                  disabled={isSaving}
+                  className="px-6 py-4 rounded-xl font-bold bg-white dark:bg-gray-800 text-red-500 dark:text-red-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-700 disabled:opacity-50"
                 >
                   Excluir
                 </button>
               )}
               <button 
                 onClick={handleSave}
-                className="flex-1 py-4 rounded-xl font-bold bg-primary text-white hover:bg-primary/90 transition-colors"
+                disabled={isSaving}
+                className="flex-1 py-4 rounded-xl font-bold bg-primary text-white hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
               >
+                {isSaving ? <Loader2 className="animate-spin" size={20} /> : null}
                 Salvar Registro
               </button>
             </div>
